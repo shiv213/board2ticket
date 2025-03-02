@@ -1,4 +1,4 @@
-# board2ticket - HackIllinois25
+# board2ticket - HackIllinois25 **Winners!!!**
 
 > Transforming whiteboard discussions into structured GitHub tickets automatically.
 
