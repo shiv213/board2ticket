@@ -4,7 +4,7 @@
 
 ## 📋 Overview
 
-board2ticket is an innovative software solution developed by Shiv Trivedi, Ahaan Kanaujia, and Aditya Kunte at Hack Illinois 2025. It automatically transforms whiteboard discussions about code issues into structured GitHub tickets by leveraging advanced computer vision, audio processing, and natural language processing technologies.
+board2ticket automatically transforms whiteboard discussions about code issues into structured GitHub tickets by leveraging advanced computer vision, audio processing, and natural language processing technologies.
 
 ## 🔍 Problem Statement
 
@@ -115,4 +115,4 @@ board2ticket bridges the gap between collaborative whiteboard sessions and actio
 
 ## 🏆 Recognition
 
-Developed at Hack Illinois 2025 at the University of Illinois Urbana Champaign.
+Developed for and first place winners of Hack Illinois 2025 at the University of Illinois Urbana Champaign.
