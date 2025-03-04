@@ -17,35 +17,6 @@ def extract_writing(frame):
     result = cv2.bitwise_not(inverted)
     return result, contours
 
-def draw_bounding_boxes(frame, contours, min_contour_area=50):
-    # Create a copy of the frame for drawing boxes
-    bbox_frame = frame.copy()
-    if len(bbox_frame.shape) == 2:
-        bbox_frame = cv2.cvtColor(bbox_frame, cv2.COLOR_GRAY2BGR)
-    
-    # List to store bounding box coordinates (x, y, w, h)
-    bounding_boxes = []
-    
-    for contour in contours:
-        # Filter out very small contours
-        if cv2.contourArea(contour) < min_contour_area:
-            continue
-        
-        # Get bounding rectangle
-        x, y, w, h = cv2.boundingRect(contour)
-        bounding_boxes.append((x, y, w, h))
-        
-        # Draw rectangle
-        # cv2.rectangle(bbox_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-    
-    # Use DBSCAN to cluster bounding boxes
-    if bounding_boxes:
-        clustered_boxes = cluster_boxes_dbscan(bounding_boxes)
-        bbox_frame, boxes = draw_clustered_boxes(bbox_frame, clustered_boxes)
-        return bbox_frame, boxes
-    
-    return bbox_frame, clustered_boxes
-
 def cluster_boxes_dbscan(bounding_boxes, eps=100, min_samples=3):
     """
     Cluster bounding boxes using DBSCAN
@@ -94,47 +65,93 @@ def cluster_boxes_dbscan(bounding_boxes, eps=100, min_samples=3):
     
     return merged_boxes
 
-def draw_clustered_boxes(frame, clustered_boxes):
+def process_bounding_boxes(frame, contours, min_contour_area=50, cluster=True, eps=100, min_samples=3, 
+                           filter_large_boxes=True, draw_boxes=True, box_color=(255, 0, 0)):
     """
-    Draw the clustered bounding boxes on a frame
+    Unified function to process, cluster and draw bounding boxes
+    
+    Args:
+        frame: Input frame
+        contours: List of contours
+        min_contour_area: Minimum area for considering a contour
+        cluster: Whether to cluster boxes using DBSCAN
+        eps: DBSCAN epsilon parameter
+        min_samples: DBSCAN min_samples parameter
+        filter_large_boxes: Whether to filter out boxes larger than 40-50% of the frame
+        draw_boxes: Whether to draw boxes on the frame
+        box_color: Color for drawing boxes (B,G,R)
+        
+    Returns:
+        Processed frame with boxes drawn, list of final bounding boxes
     """
-    clustered_frame = frame.copy()
-    boxes = []
-    for i, (x, y, w, h) in enumerate(clustered_boxes):
-
-        # If box is larger than 50% of the frame, skip it
-        if w > 0.4 * frame.shape[1] or h > 0.5 * frame.shape[0]:
+    # Create a copy of the frame for drawing boxes
+    bbox_frame = frame.copy()
+    if len(bbox_frame.shape) == 2:
+        bbox_frame = cv2.cvtColor(bbox_frame, cv2.COLOR_GRAY2BGR)
+    
+    # List to store bounding box coordinates (x, y, w, h)
+    bounding_boxes = []
+    
+    # Extract individual bounding boxes from contours
+    for contour in contours:
+        # Filter out very small contours
+        if cv2.contourArea(contour) < min_contour_area:
             continue
-        else:
-            boxes.append((x, y, w, h))
-            # Draw rectangle with a different color
-            cv2.rectangle(clustered_frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+        
+        # Get bounding rectangle
+        x, y, w, h = cv2.boundingRect(contour)
+        bbox_contents = bbox_frame[y:y+h, x:x+w]
+        # check if border of bounding box is 70 percent white
+        border_thickness = 2
+        top = bbox_contents[:border_thickness, :]
+        bottom = bbox_contents[-border_thickness:, :]
+        left = bbox_contents[:, :border_thickness]
+        right = bbox_contents[:, -border_thickness:]
+        border_pixels = np.concatenate([top.flatten(), bottom.flatten(), left.flatten(), right.flatten()])
+        white_ratio = np.count_nonzero(border_pixels > 200) / border_pixels.size
+        if white_ratio >= 0.7:
+            # print(f"White ratio: {white_ratio}")
+            bounding_boxes.append((x, y, w, h))
+    
+    final_boxes = []
+    
+    # Apply clustering if requested and if we have boxes
+    if cluster and bounding_boxes:
+        clustered_boxes = cluster_boxes_dbscan(bounding_boxes, eps, min_samples)
+        
+        # Filter and process the clustered boxes
+        for i, (x, y, w, h) in enumerate(clustered_boxes):
+            # Filter out large boxes if requested
+            if filter_large_boxes and (w > 0.4 * frame.shape[1] or h > 0.5 * frame.shape[0]):
+                continue
             
-            # Add box ID text
-            cv2.putText(clustered_frame, f"Cluster {i+1}", 
-                    (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.5, (255, 0, 0), 1)
-        
-    return clustered_frame, boxes
-
-def draw_merged_boxes(frame, merged_boxes):
-    """
-    Draw merged bounding boxes on a frame
-    """
-    merged_frame = frame.copy()
-    if len(merged_frame.shape) == 2:
-        merged_frame = cv2.cvtColor(merged_frame, cv2.COLOR_GRAY2BGR)
+            final_boxes.append((x, y, w, h))
+            
+            # Draw boxes if requested
+            if draw_boxes:
+                # Draw rectangle
+                cv2.rectangle(bbox_frame, (x, y), (x+w, y+h), box_color, 2)
+                
+                # Add box ID text
+                cv2.putText(bbox_frame, f"Cluster {i+1}", 
+                        (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                        0.5, box_color, 1)
+    # If not clustering, use original boxes
+    else:
+        for i, (x, y, w, h) in enumerate(bounding_boxes):
+            if filter_large_boxes and (w > 0.4 * frame.shape[1] or h > 0.5 * frame.shape[0]):
+                continue
+                
+            final_boxes.append((x, y, w, h))
+            
+            # Draw boxes if requested
+            if draw_boxes:
+                cv2.rectangle(bbox_frame, (x, y), (x+w, y+h), box_color, 2)
+                cv2.putText(bbox_frame, f"Box {i+1}", 
+                        (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                        0.5, box_color, 1)
     
-    for i, (x, y, w, h) in enumerate(merged_boxes):
-        # Draw rectangle
-        cv2.rectangle(merged_frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
-        
-        # Add box ID text
-        cv2.putText(merged_frame, f"Box {i+1}", 
-                (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                0.5, (0, 0, 255), 1)
-    
-    return merged_frame
+    return bbox_frame, final_boxes
 
 def process_frames(video, frame_nums):
     cap = cv2.VideoCapture(video)
@@ -150,8 +167,8 @@ def process_frames(video, frame_nums):
         bg_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         processed_frame, contours = extract_writing(frame)
         
-        # Draw and cluster bounding boxes in one step
-        bbox_frame, final_boxes = draw_bounding_boxes(processed_frame, contours)
+        # Use the new unified bounding box function
+        bbox_frame, final_boxes = process_bounding_boxes(processed_frame, contours)
         
         if len(processed_frame.shape) == 2:
             processed_frame = cv2.cvtColor(processed_frame, cv2.COLOR_GRAY2BGR)
@@ -167,7 +184,6 @@ def process_frames(video, frame_nums):
 
     cap.release()
 
-
 def process_and_save_frame(video, frame_num):
     cap = cv2.VideoCapture(video)
 
@@ -181,8 +197,8 @@ def process_and_save_frame(video, frame_num):
     bg_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     processed_frame, contours = extract_writing(frame)
     
-    # Draw and cluster bounding boxes in one step
-    bbox_frame, final_boxes = draw_bounding_boxes(processed_frame, contours)
+    # Use the new unified bounding box function
+    bbox_frame, final_boxes = process_bounding_boxes(processed_frame, contours)
     
     if len(processed_frame.shape) == 2:
         processed_frame = cv2.cvtColor(processed_frame, cv2.COLOR_GRAY2BGR)
@@ -197,24 +213,6 @@ def process_and_save_frame(video, frame_num):
             f"final filtered boxes: {len(final_boxes)}")
 
     cap.release()
-
-
-def process_return_frame(frame):
-    bg_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    processed_frame, contours = extract_writing(frame)
-    
-    # Draw and cluster bounding boxes in one step
-    bbox_frame, final_boxes = draw_bounding_boxes(processed_frame, contours)
-    
-    if len(processed_frame.shape) == 2:
-        processed_frame = cv2.cvtColor(processed_frame, cv2.COLOR_GRAY2BGR)
-    if len(bg_frame.shape) == 2:
-        bg_frame = cv2.cvtColor(bg_frame, cv2.COLOR_GRAY2BGR)
-
-    # Combine frames for visualization
-    combined = np.hstack((bg_frame, processed_frame, bbox_frame))
-    return processed_frame, final_boxes
-
 
 def main():
     if len(sys.argv) < 2:
@@ -235,24 +233,22 @@ def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    bounding_box_list = {}
-
     # out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'), 60, (1920*3, 1080))    
     cap = cv2.VideoCapture(input_video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    for i in tqdm(range(0, total_frames)):
+    for i in tqdm(range(0, total_frames), ascii=True):
         ret, frame = cap.read()
         if not ret:
             break
-        processed_frame, bounding_boxes = process_return_frame(frame)
-        for j, box in enumerate(bounding_boxes):
+        inverted_frame, contours = extract_writing(frame)
+        bbox_frame, final_boxes = process_bounding_boxes(inverted_frame, contours, draw_boxes=False)
+        
+        for j, box in enumerate(final_boxes):
             x, y, w, h = box
-            # saved cropped bounding box into list
-            bounding_box_list[i] = processed_frame[y:y+h, x:x+w]
-            
-            cv2.imwrite(f"{output_dir}/frame_{i}_{x},{y}_{y+h},{x+w}.png", bounding_box_list[i])
+            # saved cropped bounding box to image
+            cv2.imwrite(f"{output_dir}/frame_{i}_{x},{y}_{y+h},{x+w}.png", bbox_frame[y:y+h, x:x+w])
             # input()
-        # out.write(processed_frame)
+        # out.write(inverted_frame)
     cap.release()
     # out.release() 
     
