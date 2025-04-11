@@ -1,0 +1,152 @@
+service: whiteboard-processor
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  memorySize: 1024
+  timeout: 30
+  environment:
+    STORAGE_BUCKET: ${self:custom.storageBucket}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:ListBucket
+      Resource:
+        - "arn:aws:s3:::${self:custom.storageBucket}"
+        - "arn:aws:s3:::${self:custom.storageBucket}/*"
+
+custom:
+  storageBucket: ${opt:stage, self:provider.stage}-whiteboard-processor-storage
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+    layer: true
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!.venv/**'
+    - '!__pycache__/**'
+    - '!.pytest_cache/**'
+    - '!tests/**'
+    - '!.git/**'
+
+functions:
+  api:
+    handler: api_handler.handler
+    events:
+      - http:
+          path: /process
+          method: post
+          cors: true
+      - http:
+          path: /status/{job_id}
+          method: get
+          cors: true
+      - http:
+          path: /result/{job_id}
+          method: get
+          cors: true
+    environment:
+      STAGE: ${opt:stage, self:provider.stage}
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  extract_frames:
+    handler: handlers/frame_extractor.handler
+    memorySize: 2048
+    timeout: 300
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  extract_audio:
+    handler: handlers/audio_extractor.handler
+    memorySize: 2048
+    timeout: 300
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  detect_content:
+    handler: handlers/content_detector.handler
+    memorySize: 2048
+    timeout: 300
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  track_content:
+    handler: handlers/content_tracker.handler
+    memorySize: 1024
+    timeout: 60
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  transcribe_audio:
+    handler: handlers/audio_transcriber.handler
+    memorySize: 2048
+    timeout: 300
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  analyze_content:
+    handler: handlers/content_analyzer.handler
+    memorySize: 1024
+    timeout: 60
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+  
+  generate_output:
+    handler: handlers/output_generator.handler
+    memorySize: 1024
+    timeout: 60
+    layers:
+      - {Ref: PythonRequirementsLambdaLayer}
+
+plugins:
+  - serverless-python-requirements
+  - serverless-step-functions
+
+resources:
+  Resources:
+    StorageBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.storageBucket}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              AllowedOrigins:
+                - "*"
+              MaxAge: 3000
+
+stepFunctions:
+  stateMachines:
+    whiteboardProcessingWorkflow:
+      name: whiteboard-processing-workflow-${opt:stage, self:provider.stage}
+      definition: ${file(./step-functions.json)}
+      dependsOn:
+        - ExtractFramesLambdaFunction
+        - ExtractAudioLambdaFunction
+        - DetectContentLambdaFunction
+        - TrackContentLambdaFunction
+        - TranscribeAudioLambdaFunction
+        - AnalyzeContentLambdaFunction
+        - GenerateOutputLambdaFunction
+      variables:
+        ExtractFramesFunction: ${self:service}-${opt:stage, self:provider.stage}-extract_frames
+        ExtractAudioFunction: ${self:service}-${opt:stage, self:provider.stage}-extract_audio
+        DetectContentFunction: ${self:service}-${opt:stage, self:provider.stage}-detect_content
+        TrackContentFunction: ${self:service}-${opt:stage, self:provider.stage}-track_content
+        TranscribeAudioFunction: ${self:service}-${opt:stage, self:provider.stage}-transcribe_audio
+        AnalyzeContentFunction: ${self:service}-${opt:stage, self:provider.stage}-analyze_content
+        GenerateOutputFunction: ${self:service}-${opt:stage, self:provider.stage}-generate_output

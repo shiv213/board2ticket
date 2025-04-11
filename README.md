@@ -1,118 +1,217 @@
-# board2ticket - [HackIllinois25 **Winners!!!**](https://devpost.com/software/board2ticket)
+# Whiteboard Video Processing System
 
-> Transforming whiteboard discussions into structured GitHub tickets automatically.
+A scalable, serverless system for processing whiteboard videos, extracting content, and generating structured outputs.
 
-## 📋 Overview
+## Architecture
 
-board2ticket automatically transforms whiteboard discussions about code issues into structured GitHub tickets by leveraging advanced computer vision, audio processing, and natural language processing technologies.
+This system is designed to process whiteboard videos in a scalable, serverless manner. It extracts frames from videos, detects content regions, tracks content across frames, transcribes audio, and generates structured outputs using LLMs.
 
-## 🔍 Problem Statement
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Extract   │     │   Extract   │     │   Detect    │     │    Track    │
+│   Frames    │────▶│    Audio    │────▶│   Content   │────▶│   Content   │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+       │                   │                   │                   │
+       │                   │                   │                   │
+       ▼                   ▼                   ▼                   ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Transcribe │     │   Analyze   │     │  Generate   │     │     API     │
+│    Audio    │────▶│   Content   │────▶│   Output    │◀────│   Gateway   │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+```
 
-Software development teams often use whiteboards for collaborative problem-solving and design discussions. However, valuable insights and decisions from these sessions are frequently lost in the transition to actionable development tasks, leading to:
+### Components
 
-- Information loss between ideation and implementation
-- Time wasted on manual note-taking and ticket creation
-- Difficulty maintaining context between discussions and code
-- Limited historical record of design decisions
+1. **API Gateway**: Handles HTTP requests and routes them to the appropriate Lambda functions.
+2. **Extract Frames**: Extracts frames from the video at a specified sampling rate.
+3. **Extract Audio**: Extracts audio from the video.
+4. **Detect Content**: Detects content regions in the extracted frames.
+5. **Track Content**: Tracks content across frames to identify changes over time.
+6. **Transcribe Audio**: Transcribes audio to text using speech recognition.
+7. **Analyze Content**: Analyzes content with transcript and context.
+8. **Generate Output**: Generates structured outputs using LLMs.
 
-## 💡 Solution
+### Data Flow
 
-board2ticket bridges the gap between collaborative whiteboard sessions and actionable development tasks through a comprehensive multimodal pipeline:
+1. User uploads a video through the API.
+2. The video is stored in S3.
+3. A Step Functions workflow is triggered to orchestrate the processing pipeline.
+4. Each step in the pipeline is executed as a separate Lambda function.
+5. The results are stored in S3 and can be retrieved through the API.
 
-1. **Capture whiteboard sessions** (video + audio)
-2. **Process visual content** using advanced computer vision techniques
-3. **Transcribe and analyze discussions** using audio processing
-4. **Align visual and audio data** through temporal mapping
-5. **Generate structured GitHub tickets** with all relevant context
+## Deployment
 
-## 🛠️ Technical Implementation
+### Prerequisites
 
-### Image Processing Pipeline
+- [Node.js](https://nodejs.org/) (v14 or later)
+- [Serverless Framework](https://www.serverless.com/) (v3 or later)
+- [AWS CLI](https://aws.amazon.com/cli/) (configured with appropriate credentials)
+- [Python](https://www.python.org/) (v3.9 or later)
 
-- **Frame Extraction and Preprocessing**
-  - Convert video frames to grayscale
-  - Apply binary thresholding (threshold value 130)
-  - Generate inverted binary images to highlight content
+### Installation
 
-- **Content Detection**
-  - OpenCV contour detection (cv2.findContours with RETR_EXTERNAL mode)
-  - Filter contours based on minimum area (50px²)
-  - Extract precise bounding boxes
+1. Clone the repository:
 
-- **Intelligent Region Clustering**
-  - DBSCAN clustering to group related content
-  - Centroid calculation for content elements
-  - Proximate element merging (eps=100)
-  - Oversized region filtering (>40% frame width or >50% frame height)
+```bash
+git clone https://github.com/yourusername/whiteboard-processor.git
+cd whiteboard-processor
+```
 
-- **Cluster Tracking**
-  - Sequential frame processing
-  - Pixel density change monitoring
-  - Content update timestamping
+2. Install dependencies:
 
-### Audio Processing Pipeline
+```bash
+npm install -g serverless
+npm install
+pip install -r requirements.txt
+```
 
-- **Silence-Based Segmentation**
-  - pydub's split_on_silence (-40dBFS threshold)
-  - 1500ms minimum silence for topic transitions
-  - Precise timestamp generation
+3. Deploy to AWS:
 
-- **Speech-to-Text Conversion**
-  - OpenAI's Whisper model for transcription
-  - Timestamp-linked transcriptions
+```bash
+serverless deploy --stage dev
+```
 
-- **Semantic Clustering**
-  - Text embeddings via OpenAI's text-embedding-3-small
-  - Unsupervised clustering (Agglomerative or K-means)
-  - Topic cluster identification
-  - Temporal sequence preservation
+### Configuration
 
-### Multimodal Integration
+The system can be configured using environment variables:
 
-- **Temporal Alignment** of whiteboard updates with audio segments
-- **Context Enrichment** with codebase information
-- **Vision-Language Modeling** for combined data processing
+- `STAGE`: The deployment stage (e.g., `dev`, `staging`, `prod`).
+- `STORAGE_BUCKET`: The S3 bucket for storing videos, frames, and results.
+- `STATE_MACHINE_ARN`: The ARN of the Step Functions state machine.
 
-### Ticket Generation
+## Usage
 
-- **Content Clustering** for related discussions
-- **Metadata Generation** for structured ticket fields
-- **Visual Reference Inclusion** for context
-- **Codebase Integration** for implementation guidance
+### API Endpoints
 
-## 🔄 System Pipeline
+#### POST /process
 
-1. **Codebase Contextualization**: Converting GitHub repositories into LLM-friendly format
-2. **Video Processing**: Custom OpenCV-based pipeline for text and diagrams
-3. **Audio Processing**: Segmenting and transcribing with pydub and OpenAI API
-4. **Multimodal Summarization**: Vision-language model interpretation
-5. **Temporal Clustering**: Timeline-based discussion grouping
-6. **Ticket Generation**: Structured GitHub issues creation
+Upload a video for processing.
 
-## ✨ Benefits
+**Request:**
 
-- **Meeting Efficiency**: Eliminates manual note-taking and ticket creation
-- **Reduced Information Loss**: Captures all whiteboard content and discussions
-- **Improved Development Workflow**: Creates clear, contextual tickets
-- **Enhanced Collaboration**: Preserves collaborative intelligence
-- **Historical Record**: Maintains visual and textual development history
+```
+POST /process
+Content-Type: multipart/form-data
 
-## 📚 Technical Requirements
+file: <video_file>
+context: {
+  "codebase_context": "Optional context about the codebase",
+  "project_name": "Optional project name",
+  "additional_info": {
+    "key": "value"
+  }
+}
+```
 
-- Python 3.x
-- OpenCV (cv2) for image processing
-- NumPy and scikit-learn for data processing and clustering
-- PyDub and librosa for audio processing
-- OpenAI API (Whisper transcription and text embeddings)
-- Vision-language models for multimodal processing
-- LLM integration for ticket generation
+**Response:**
 
-## 👥 Team
+```json
+{
+  "job_id": "123e4567-e89b-12d3-a456-426614174000",
+  "status": "processing"
+}
+```
 
-- Shiv Trivedi
-- Ahaan Kanaujia
-- Aditya Kunte
+#### GET /status/{job_id}
 
-## 🏆 Recognition
+Get the status of a processing job.
 
-Developed for and first place winners of Hack Illinois 2025 at the University of Illinois Urbana Champaign.
+**Response:**
+
+```json
+{
+  "job_id": "123e4567-e89b-12d3-a456-426614174000",
+  "status": "completed",
+  "steps": {
+    "frame_extraction": {
+      "status": "completed",
+      "frames_count": 100,
+      "frames_key": "metadata/123e4567-e89b-12d3-a456-426614174000/frames.json"
+    },
+    "audio_extraction": {
+      "status": "completed",
+      "audio_key": "audio/123e4567-e89b-12d3-a456-426614174000/audio.wav"
+    },
+    "content_detection": {
+      "status": "completed",
+      "regions_count": 50,
+      "regions_key": "metadata/123e4567-e89b-12d3-a456-426614174000/regions.json"
+    },
+    "content_tracking": {
+      "status": "completed",
+      "tracks_count": 10,
+      "tracks_key": "metadata/123e4567-e89b-12d3-a456-426614174000/tracks.json"
+    },
+    "transcription": {
+      "status": "completed",
+      "transcript_key": "metadata/123e4567-e89b-12d3-a456-426614174000/transcript.json"
+    },
+    "content_analysis": {
+      "status": "completed",
+      "analysis_key": "metadata/123e4567-e89b-12d3-a456-426614174000/analysis.json"
+    },
+    "output_generation": {
+      "status": "completed",
+      "result_key": "results/123e4567-e89b-12d3-a456-426614174000.json"
+    }
+  }
+}
+```
+
+#### GET /result/{job_id}
+
+Get the result of a completed processing job.
+
+**Response:**
+
+```json
+{
+  "items": [
+    {
+      "track_id": 1,
+      "frames": [0, 30, 60, 90],
+      "summary": "This is a summary of the content in track 1."
+    },
+    {
+      "track_id": 2,
+      "frames": [120, 150, 180, 210],
+      "summary": "This is a summary of the content in track 2."
+    }
+  ]
+}
+```
+
+## Development
+
+### Local Development
+
+1. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Run the API locally:
+
+```bash
+cd hackillinois25
+uvicorn orchestrator:app --reload
+```
+
+3. Test the API:
+
+```bash
+curl -X POST -F "file=@path/to/video.mp4" http://localhost:8000/process
+```
+
+### Adding New Components
+
+To add a new component to the pipeline:
+
+1. Create a new handler in the `handlers` directory.
+2. Add the handler to the `serverless.yml` file.
+3. Update the Step Functions state machine to include the new step.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

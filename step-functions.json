@@ -1,0 +1,187 @@
+{
+  "Comment": "Whiteboard Video Processing Workflow",
+  "StartAt": "ExtractFrames",
+  "States": {
+    "ExtractFrames": {
+      "Type": "Task",
+      "Resource": "${ExtractFramesFunction}",
+      "Next": "ExtractAudio",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailState"
+        }
+      ]
+    },
+    "ExtractAudio": {
+      "Type": "Task",
+      "Resource": "${ExtractAudioFunction}",
+      "Next": "ParallelProcessing",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailState"
+        }
+      ]
+    },
+    "ParallelProcessing": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "DetectContent",
+          "States": {
+            "DetectContent": {
+              "Type": "Task",
+              "Resource": "${DetectContentFunction}",
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "DetectContentFail"
+                }
+              ]
+            },
+            "DetectContentFail": {
+              "Type": "Fail",
+              "Error": "DetectContentError",
+              "Cause": "Error in content detection"
+            }
+          }
+        },
+        {
+          "StartAt": "TranscribeAudio",
+          "States": {
+            "TranscribeAudio": {
+              "Type": "Task",
+              "Resource": "${TranscribeAudioFunction}",
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "TranscribeAudioFail"
+                }
+              ]
+            },
+            "TranscribeAudioFail": {
+              "Type": "Fail",
+              "Error": "TranscribeAudioError",
+              "Cause": "Error in audio transcription"
+            }
+          }
+        }
+      ],
+      "Next": "TrackContent",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailState"
+        }
+      ]
+    },
+    "TrackContent": {
+      "Type": "Task",
+      "Resource": "${TrackContentFunction}",
+      "Next": "AnalyzeContent",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailState"
+        }
+      ]
+    },
+    "AnalyzeContent": {
+      "Type": "Task",
+      "Resource": "${AnalyzeContentFunction}",
+      "Next": "GenerateOutput",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailState"
+        }
+      ]
+    },
+    "GenerateOutput": {
+      "Type": "Task",
+      "Resource": "${GenerateOutputFunction}",
+      "Next": "SuccessState",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailState"
+        }
+      ]
+    },
+    "SuccessState": {
+      "Type": "Succeed"
+    },
+    "FailState": {
+      "Type": "Fail",
+      "Error": "WorkflowFailed",
+      "Cause": "One or more steps in the workflow failed"
+    }
+  }
+}

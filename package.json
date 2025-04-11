@@ -1,0 +1,29 @@
+{
+  "name": "whiteboard-processor",
+  "version": "1.0.0",
+  "description": "A serverless system for processing whiteboard videos",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "remove": "serverless remove",
+    "remove:dev": "serverless remove --stage dev",
+    "remove:prod": "serverless remove --stage prod"
+  },
+  "keywords": [
+    "serverless",
+    "aws",
+    "lambda",
+    "whiteboard",
+    "video",
+    "processing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "serverless": "^3.34.0",
+    "serverless-python-requirements": "^6.0.0",
+    "serverless-step-functions": "^3.14.0"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "codebase_context": "This is a Python project that uses Flask for the backend and React for the frontend. The main functionality is implemented in the app.py file, which defines several API endpoints for user authentication, data retrieval, and data manipulation. The frontend is built using React components and communicates with the backend using Axios for HTTP requests.",
+  "project_name": "Example Project",
+  "additional_info": {
+    "team_members": ["Alice", "Bob", "Charlie"],
+    "meeting_date": "2025-04-11",
+    "meeting_topic": "Sprint Planning",
+    "key_decisions": [
+      "Implement user authentication using JWT",
+      "Add data visualization for analytics dashboard",
+      "Refactor database schema to improve performance"
+    ]
+  }
+}
