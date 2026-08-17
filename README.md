@@ -1,5 +1,7 @@
 # board2ticket - [HackIllinois25 **Winners!!!**](https://devpost.com/software/board2ticket)
 
+https://github.com/user-attachments/assets/741a433b-c2fa-40e8-85f5-bb5e0df2edaa
+
 > Transforming whiteboard discussions into structured GitHub tickets automatically.
 
 ## 📋 Overview
